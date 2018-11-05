@@ -90,15 +90,15 @@ class SMBSession {
 		this.options = options
 		this.done = false
 		this.responsePromse = null
+		this.responseBuffer = Buffer.alloc(0)
 		this.messageid = 0
 		this.sessionid = '0'
 		this.treeid = 0
 		this.fileid = null
 
 		this.socket = new net.Socket()
-			.on('data', data => {
-				this.responsePromise.resolve(data)
-			}).on('error', err => {
+			.on('data', data => this._response(data))
+			.on('error', err => {
 				this.socket.destroy()
 				this.responsePromise.reject(err)
 			}).on('end', () => {
@@ -178,6 +178,17 @@ class SMBSession {
 		this.socket.write(message)
 		this.messageid++
 		return promise
+	}
+
+	_response(data) {
+		this.responseBuffer = Buffer.concat([this.responseBuffer, data])
+		const netbiosLength = this.responseBuffer.readUInt32BE(0)
+		// check if packet has been received completely
+		if(this.responseBuffer.length >= netbiosLength + 4) {
+			const packetBuffer = Buffer.from(this.responseBuffer)
+			this.responseBuffer = Buffer.alloc(0)
+			this.responsePromise.resolve(packetBuffer)
+		}
 	}
 
 	_createRequest(command, params) {
