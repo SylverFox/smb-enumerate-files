@@ -167,7 +167,7 @@ class SMBSession {
 		return files
 	}
 
-	close() {
+	async close() {
 		this.socket.destroy()
 	}
 
