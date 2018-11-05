@@ -5,9 +5,9 @@ const ntlm = require('ntlm')
 const NEGOTIATE = 0x00
 const SESSION_SETUP = 0x01
 const TREE_CONNECT = 0x03
-const CREATE = 	0x05
+const CREATE = 0x05
 const CLOSE = 0x06
-const QUERY_DIRECTORY = 	0x0e
+const QUERY_DIRECTORY = 0x0e
 
 // common error codes
 const COMMON_ERRORS = {
@@ -38,7 +38,7 @@ const REQUEST_STRUCTURES = {
 /**
  * Enumerates a directory on a share given in the options. Returns a promise that resolves into a
  * list of files and directories in that folder.
- * @param {object|string} options
+ * @param {object|string} options - An smb url string or object with the same arguments
  */
 exports.enumerate = async options => {
 	options = parseOptions(options)
@@ -56,8 +56,8 @@ exports.enumerate = async options => {
 
 /**
  * Creates a new SMB session that can also be used to enumerate files. This requires a manual
- * connect and close operation
- * @param {object|string} options
+ * connect and close operation.
+ * @param {object|string} options - An smb url string or object with the same arguments
  */
 exports.createSession = options => new SMBSession(parseOptions(options))
 
@@ -137,6 +137,7 @@ class SMBSession {
 
 	async enumerate(path) {
 		path = path.replace(/\\/g, '/').split('/').filter(p => p).join('\\')
+
 		// create file handle
 		let result, files = []
 		result = await this._request(this._createRequest(CREATE, Buffer.from(path, 'ucs2')))
@@ -155,6 +156,7 @@ class SMBSession {
 			}
 		}
 		this._confirmStatus(status, 0x80000006) // STATUS_NO_MORE_FILES
+
 		// filter '.' and '..' files
 		files = files.filter(f => !['.', '..'].includes(f.filename))
 
