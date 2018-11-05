@@ -17,36 +17,35 @@ const COMMON_ERRORS = {
 	0xc000006d: 'STATUS_LOGON_FAILURE',
 	0xc0000072: 'STATUS_ACCOUNT_DISABLED',
 	0xc00000bb: 'STATUS_NOT_SUPPORTED',
-	0xC0000033: 'STATUS_OBJECT_NAME_INVALID'
+	0xC0000033: 'STATUS_OBJECT_NAME_INVALID',
+	0xC0000034: 'STATUS_OBJECT_NAME_NOT_FOUND'
 }
 
 const NETBIOS_HEADER = '00000000'
 
 const SMB_HEADER = 'fe534d4240' + '0'.repeat(118)
 
-const requestStructures = {
+const REQUEST_STRUCTURES = {
 	[NEGOTIATE]:  '24000200010000000000000000000000000000000000000000000000000000000000000002021002',
 	[SESSION_SETUP]: '190000010100000000000000580000000000000000000000',
 	[TREE_CONNECT]: '0900000048000000',
 	[CREATE]: '39000000020000000000000000000000000000000000000000000080'
-		+ '0000000007000000010000000100000078000000000000000000000000',
+		+ '00000000070000000100000001000000780000000000000000000000',
 	[CLOSE]: '180000000000000000000000000000000000000000000000',
 	[QUERY_DIRECTORY]: '2100250000000000000000000000000000000000000000006000000000000100'
 }
 
+/**
+ * Enumerates a directory on a share given in the options. Returns a promise that resolves into a
+ * list of files and directories in that folder.
+ * @param {object|string} options
+ */
 exports.enumerate = async options => {
 	options = parseOptions(options)
-	if(!options.path) {
-		throw new Error('No path given')
-	}
-	console.log(options.path)
 	const session = this.createSession(options)
 	try {
-		console.log('session created')
 		await session.connect()
-		console.log('connected')
 		const files = await session.enumerate(options.path)
-		console.log('retrieved files')
 		return files
 	} catch(err) {
 		throw err
@@ -55,6 +54,11 @@ exports.enumerate = async options => {
 	}
 }
 
+/**
+ * Creates a new SMB session that can also be used to enumerate files. This requires a manual
+ * connect and close operation
+ * @param {object|string} options
+ */
 exports.createSession = options => new SMBSession(parseOptions(options))
 
 function parseOptions(options) {
@@ -71,7 +75,7 @@ function parseOptions(options) {
 		_options.host = matches[4] || _options.host
 		_options.port = matches[5] || _options.port
 		_options.share = matches[6]
-		_options.path = matches[7]
+		_options.path = matches[7] || ''
 	} else {
 		Object.assign(_options, options)
 	}
@@ -93,11 +97,6 @@ class SMBSession {
 
 		this.socket = new net.Socket()
 			.on('data', data => {
-				const packetLength = data.readUInt32BE(0)
-				if(data.length > packetLength + 4) {
-					// double packet received, ignore first one (most likely STATUS_PENDING)
-					data = data.slice(packetLength + 4, data.length)
-				}
 				this.responsePromise.resolve(data)
 			}).on('error', err => {
 				this.socket.destroy()
@@ -137,24 +136,17 @@ class SMBSession {
 	}
 
 	async enumerate(path) {
-		if(typeof path !== 'string' || !path.length) {
-			throw new Error('invalid path')
-		}
-		path = path.split('/').filter(p => p).join('\\')
-		console.log('path', JSON.stringify(path))
-
+		path = path.replace(/\\/g, '/').split('/').filter(p => p).join('\\')
 		// create file handle
 		let result, files = []
 		result = await this._request(this._createRequest(CREATE, Buffer.from(path, 'ucs2')))
 		this._confirmStatus(result.readUInt32LE(12), 0)
 		this.fileid = result.slice(132, 148).toString('hex')
-		console.log('created file handle')
 
 		// query directory
 		let status = 0
 		while(status === 0) {
 			result = await this._request(this._createRequest(QUERY_DIRECTORY, Buffer.from('*', 'ucs2')))
-			console.log('query directory received')
 			status = result.readUInt32LE(12)
 			if(status === 0) {
 				const dataLength = result.readUInt32LE(72)
@@ -166,7 +158,6 @@ class SMBSession {
 		// filter '.' and '..' files
 		files = files.filter(f => !['.', '..'].includes(f.filename))
 
-		console.log('closing')
 		// close file handle
 		this._request(this._createRequest(CLOSE))
 
@@ -189,7 +180,7 @@ class SMBSession {
 
 	_createRequest(command, params) {
 		const header = Buffer.from(NETBIOS_HEADER + SMB_HEADER, 'hex')
-		let structure = Buffer.from(requestStructures[command], 'hex')
+		let structure = Buffer.from(REQUEST_STRUCTURES[command], 'hex')
 
 		if(command === SESSION_SETUP) {
 			structure.writeInt32LE(params.length, 14)
@@ -199,7 +190,11 @@ class SMBSession {
 			structure = Buffer.concat([structure, params])
 		} else if(command === CREATE) {
 			structure.writeUInt16LE(params.length, 46)
-			structure = Buffer.concat([structure, params])
+			// we must write at least one byte
+			if(params.length)
+				structure = Buffer.concat([structure, params])
+			else
+				structure = Buffer.concat([structure, Buffer.from([0])])
 		} else if(command === CLOSE) {
 			structure.write(this.fileid, 8, this.fileid.length, 'hex')
 		} else if(command === QUERY_DIRECTORY) {
@@ -254,7 +249,6 @@ class SMBSession {
 				hidden: !!(fileAttributes & 0x02)
 			}
 			files.push(file)
-			console.log(JSON.stringify(file))
 			offset += nextEntryOffset
 		}
 		return files
