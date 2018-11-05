@@ -18,7 +18,8 @@ const COMMON_ERRORS = {
 	0xc0000072: 'STATUS_ACCOUNT_DISABLED',
 	0xc00000bb: 'STATUS_NOT_SUPPORTED',
 	0xC0000033: 'STATUS_OBJECT_NAME_INVALID',
-	0xC0000034: 'STATUS_OBJECT_NAME_NOT_FOUND'
+	0xC0000034: 'STATUS_OBJECT_NAME_NOT_FOUND',
+	0xc000003a: 'STATUS_OBJECT_PATH_NOT_FOUND'
 }
 
 const NETBIOS_HEADER = '00000000'
@@ -142,12 +143,14 @@ class SMBSession {
 		let result, files = []
 		result = await this._request(this._createRequest(CREATE, Buffer.from(path, 'ucs2')))
 		this._confirmStatus(result.readUInt32LE(12), 0)
-		this.fileid = result.slice(132, 148).toString('hex')
+		const fileid = result.slice(132, 148).toString('hex')
 
 		// query directory
 		let status = 0
 		while(status === 0) {
-			result = await this._request(this._createRequest(QUERY_DIRECTORY, Buffer.from('*', 'ucs2')))
+			result = await this._request(
+				this._createRequest(QUERY_DIRECTORY, {fid: fileid, buffer: Buffer.from('*', 'ucs2')})
+			)
 			status = result.readUInt32LE(12)
 			if(status === 0) {
 				const dataLength = result.readUInt32LE(72)
@@ -161,7 +164,7 @@ class SMBSession {
 		files = files.filter(f => !['.', '..'].includes(f.filename))
 
 		// close file handle
-		this._request(this._createRequest(CLOSE))
+		await this._request(this._createRequest(CLOSE, fileid))
 
 		this.done = true
 		return files
@@ -185,8 +188,8 @@ class SMBSession {
 		const netbiosLength = this.responseBuffer.readUInt32BE(0)
 		// check if packet has been received completely
 		if(this.responseBuffer.length >= netbiosLength + 4) {
-			const packetBuffer = Buffer.from(this.responseBuffer)
-			this.responseBuffer = Buffer.alloc(0)
+			const packetBuffer = Buffer.from(this.responseBuffer.slice(0, netbiosLength + 4))
+			this.responseBuffer = this.responseBuffer.slice(netbiosLength + 4)
 			this.responsePromise.resolve(packetBuffer)
 		}
 	}
@@ -209,11 +212,11 @@ class SMBSession {
 			else
 				structure = Buffer.concat([structure, Buffer.from([0])])
 		} else if(command === CLOSE) {
-			structure.write(this.fileid, 8, this.fileid.length, 'hex')
+			structure.write(params, 8, params.length, 'hex')
 		} else if(command === QUERY_DIRECTORY) {
-			structure.write(this.fileid, 8, this.fileid.length, 'hex')
-			structure.writeUInt16LE(params.length, 26)
-			structure = Buffer.concat([structure, params])
+			structure.write(params.fid, 8, params.fid.length, 'hex')
+			structure.writeUInt16LE(params.buffer.length, 26)
+			structure = Buffer.concat([structure, params.buffer])
 		}
 		
 		const buffer = Buffer.concat([header, structure])
