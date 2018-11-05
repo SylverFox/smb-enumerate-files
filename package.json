@@ -1,6 +1,6 @@
 {
   "name": "smb-enumerate-files",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Enumeration of files on SMB shares for Node",
   "author": "Joris Diesvelt <jorisdiesvelt@gmail.com>",
   "main": "index.js",
