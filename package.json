@@ -1,0 +1,33 @@
+{
+  "name": "smb-enumerate-files",
+  "version": "0.1.0",
+  "description": "Enumeration of files on SMB shares for Node",
+  "author": "Joris Diesvelt <jorisdiesvelt@gmail.com>",
+  "main": "index.js",
+  "keywords": [
+    "SMB",
+    "SMB2",
+    "CIFS",
+    "Samba",
+    "network",
+    "shares",
+    "file-sharing",
+    "enumeration",
+    "listing"
+  ],
+  "homepage": "https://github.com/SylverFox/smb-enumerate-files#readme",
+  "bugs": {
+    "url": "https://github.com/SylverFox/smb-enumerate-files/issues"
+  },
+  "license": "ISC",
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SylverFox/smb-enumerate-files.git"
+  },
+  "dependencies": {
+    "ntlm": "^0.1.3"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+.vscode/
+
+# developer test files
+test*.js
+.todo
