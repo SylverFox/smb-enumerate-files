@@ -29,13 +29,17 @@ const requestStructures = {
 	[SESSION_SETUP]: '190000010100000000000000580000000000000000000000',
 	[TREE_CONNECT]: '0900000048000000',
 	[CREATE]: '39000000020000000000000000000000000000000000000000000080'
-		+ '00000000070000000100000001000000780000000000000000000000', //0x00200021
+		+ '0000000007000000010000000100000078000000000000000000000000',
 	[CLOSE]: '180000000000000000000000000000000000000000000000',
 	[QUERY_DIRECTORY]: '2100250000000000000000000000000000000000000000006000000000000100'
 }
 
 exports.enumerate = async options => {
 	options = parseOptions(options)
+	if(!options.path) {
+		throw new Error('No path given')
+	}
+	console.log(options.path)
 	const session = this.createSession(options)
 	try {
 		console.log('session created')
@@ -137,6 +141,7 @@ class SMBSession {
 			throw new Error('invalid path')
 		}
 		path = path.split('/').filter(p => p).join('\\')
+		console.log('path', JSON.stringify(path))
 
 		// create file handle
 		let result, files = []
@@ -226,17 +231,27 @@ class SMBSession {
 
 	_parseFiles(data) {
 		let files = [], offset = 0, nextEntryOffset = -1
+
+		const LDAPtoUNIXtime = time => new Date(time/1e4 - 1.16444736e13)
+		const readUInt64LE = (buf, offset) =>
+			parseInt(buf.slice(offset, offset + 8).swap64().toString('hex'), 16)
+
 		while(nextEntryOffset !== 0) {
 			nextEntryOffset = data.readUInt32LE(offset)
+
 			const fileNameLength = data.readUInt32LE(offset + 60)
+			const fileAttributes = data.readUInt32LE(offset + 56)
 			const file = {
 				filename: data.toString('ucs2', offset + 104, offset + 104 + fileNameLength),
-				allocationSize: data.slice(offset + 48, offset + 56),
-				fileAttributes: data.readUInt32LE(offset + 56),
-				creationTime: data.slice(offset + 8, offset + 16),
-				lastAccessTime: data.readUInt32LE(offset + 16) + data.readInt32LE(offset + 20) << 8,
-				lastWriteTime: data.readUInt32LE(offset + 24) + data.readInt32LE(offset + 28) << 8,
-				changeTime: data.readUInt32LE(offset + 32) + data.readInt32LE(offset + 36) << 8
+				size: readUInt64LE(data, offset + 40),
+				sizeOnDisk: readUInt64LE(data, offset + 48),
+				created: LDAPtoUNIXtime(readUInt64LE(data, offset + 8)),
+				accessed: LDAPtoUNIXtime(readUInt64LE(data, offset + 16)),
+				modified: LDAPtoUNIXtime(readUInt64LE(data, offset + 24)),
+				changed: LDAPtoUNIXtime(readUInt64LE(data, offset + 32)),
+				attributes: fileAttributes,
+				directory: !!(fileAttributes & 0x10),
+				hidden: !!(fileAttributes & 0x02)
 			}
 			files.push(file)
 			console.log(JSON.stringify(file))
