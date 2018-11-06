@@ -19,7 +19,8 @@ const COMMON_ERRORS = {
 	0xc00000bb: 'STATUS_NOT_SUPPORTED',
 	0xC0000033: 'STATUS_OBJECT_NAME_INVALID',
 	0xC0000034: 'STATUS_OBJECT_NAME_NOT_FOUND',
-	0xc000003a: 'STATUS_OBJECT_PATH_NOT_FOUND'
+	0xc000003a: 'STATUS_OBJECT_PATH_NOT_FOUND',
+	0xC00000CC: 'STATUS_BAD_NETWORK_NAME'
 }
 
 const NETBIOS_HEADER = '00000000'
@@ -100,7 +101,6 @@ class SMBSession {
 		this.socket = new net.Socket()
 			.on('data', data => this._response(data))
 			.on('error', err => {
-				this.socket.destroy()
 				this.responsePromise.reject(err)
 			}).on('end', () => {
 				if(!this.done)
@@ -110,6 +110,7 @@ class SMBSession {
 	}
 
 	async connect() {
+		this.done = false
 		let result, data
 
 		// negotiate
@@ -134,9 +135,12 @@ class SMBSession {
 		result = await this._request(this._createRequest(TREE_CONNECT, Buffer.from(path, 'ucs2')))
 		this._confirmStatus(result.readUInt32LE(12), 0)
 		this.treeid = result.readUInt32LE(40)
+
+		this.done = true
 	}
 
 	async enumerate(path) {
+		this.done = false
 		path = path.replace(/\\/g, '/').split('/').filter(p => p).join('\\')
 
 		// create file handle
@@ -231,7 +235,6 @@ class SMBSession {
 
 	_confirmStatus(status, expected) {
 		if(status !== expected) {
-			this.socket.destroy()
 			if(COMMON_ERRORS[status]) {
 				throw new Error(COMMON_ERRORS[status])
 			} else {
