@@ -22,7 +22,7 @@ Connects to an SMB share and retrieves the directory listing of the specified pa
 
 Instead, an SMB connection url string may be used of the following format:
 
-`smb://[[<domain>;]<username>[:<password>]@]<host>[:port]/share[/path/to/folder][/]`
+`smb://[[<domain>;]<username>[:<password>]@]<host>[:<port>]/<share>[/path/to/folder][/]`
 
 This returns a **promise** resolving in an **array** of files. Each entry has the following properties:
 

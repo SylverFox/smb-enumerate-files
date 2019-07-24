@@ -66,7 +66,8 @@ exports.createSession = options => new SMBSession(parseOptions(options))
 function parseOptions(options) {
 	let _options = {port: 445, username: 'guest', password: '', domain: 'WORKGROUP'}
 	if(typeof options === 'string') {
-		const smbUrlRe = /smb:\/\/(?:(?:(.*);)?(\w+)(?::(\w+))?@)?([\w.]+)(?::(\d+))?\/(\w+)([\w/]*)$/
+		const smbUrlRe =
+      /^smb:\/\/(?:(?:(.*?);)?(.*?)(?::(.*?))?@)?(.+?)(?::(\d+))?\/(.*?)(?:\/(.*?))?\/?$/
 		const matches = options.match(smbUrlRe)
 		if(!matches) {
 			throw new Error('Invalid smb url')
@@ -74,7 +75,7 @@ function parseOptions(options) {
 		_options.domain = matches[1] || _options.domain
 		_options.username = matches[2] || _options.username
 		_options.password = matches[3] || _options.password
-		_options.host = matches[4] || _options.host
+		_options.host = matches[4]
 		_options.port = matches[5] || _options.port
 		_options.share = matches[6]
 		_options.path = matches[7] || ''
