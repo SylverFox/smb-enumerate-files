@@ -217,7 +217,7 @@ class SMBSession {
 			else
 				structure = Buffer.concat([structure, Buffer.from([0])])
 		} else if(command === CLOSE) {
-			structure.write(params, 8, params.length, 'hex')
+			structure.writeUInt32LE(params, 8, params.length, 'hex')
 		} else if(command === QUERY_DIRECTORY) {
 			structure.write(params.fid, 8, params.fid.length, 'hex')
 			structure.writeUInt16LE(params.buffer.length, 26)
